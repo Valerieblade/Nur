@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import Auth from "./components/Auth";
-import { supabase } from "./lib/supabase";
 
 /* ─────────────────────────────────────────
    STYLES
@@ -1247,63 +1245,29 @@ function PremiumPage({ onClose, onActivate }) {
 /* ─────────────────────────────────────────
    ROOT
 ───────────────────────────────────────── */
-// ── Ajoute cet import tout en haut du fichier App.jsx ──
-// import { useEffect, useState, useRef } from "react";   ← déjà présent
-// Ajoute en plus :
-import Auth from "./components/Auth";
-import { supabase } from "./lib/supabase";
-
-// ─────────────────────────────────────────
-// ROOT — remplace toute la fonction App()
-// ─────────────────────────────────────────
 export default function App() {
-  const [session,     setSession]     = useState(undefined); // undefined = chargement, null = non connecté
   const [onboarded,   setOnboarded]   = useState(false);
   const [tab,         setTab]         = useState("home");
   const [dark,        setDark]        = useState(false);
-  const [hassanates,  setH]           = useState(0);          // commence à 0 pour un vrai utilisateur
-  const [streak]                      = useState(0);
-  const [readingMins, setReadingMins] = useState(0);
+  const [hassanates,  setH]           = useState(1240);
+  const [streak]                      = useState(7);
+  const [readingMins, setReadingMins] = useState(12);
   const [goalMins,    setGoalMins]    = useState(15);
   const [notes,       setNotes]       = useState({});
   const [savedVerses, setSavedVerses] = useState({});
   const [toast,       setToast]       = useState(null);
-  const [reader,      setReader]      = useState(null);
+  const [reader,      setReader]      = useState(null); // { surah, verseId }
   const [isPremium,   setIsPremium]   = useState(false);
   const [showPremium, setShowPremium] = useState(false);
   const [fontSizes,   setFontSizes]   = useState({ arabic:28, fr:15, phonetic:12 });
   const tRef = useRef(null);
-
-  // ── Écoute l'état de connexion Supabase ──
-  useEffect(() => {
-    // Vérifie si une session existe déjà (ex: rechargement de page)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Écoute les changements (connexion, déconnexion)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (!session) {
-        // Réinitialise tout quand on se déconnecte
-        setH(0); setReadingMins(0); setNotes({}); setSavedVerses({});
-        setTab("home"); setReader(null); setOnboarded(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const showToast   = m => { setToast(m); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToast(null), 2200); };
   const addH        = n => setH(p => p + n);
   const openPremium = () => setShowPremium(true);
   const goHome      = () => setTab("home");
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    showToast("À bientôt ! 👋");
-  };
-
+  // "Continuer/Reprendre la lecture" — lit la progression sauvegardée
   const handleStart = () => {
     const progress = loadProgress();
     if (progress) {
@@ -1312,132 +1276,12 @@ export default function App() {
         verseId: progress.verseId,
       });
     } else {
+      // Première fois : Al-Fatiha, verset 1
       setReader({
         surah: { id:1, name:"Al-Fatiha", arabic:"الفاتحة", verses:7, rev:"Mecquoise" },
         verseId: 1,
       });
     }
-  };
-
-  const nav = [
-    { id:"home",     icon:"🏠", label:"Accueil"  },
-    { id:"quran",    icon:"📖", label:"Coran"    },
-    { id:"dhikr",    icon:"📿", label:"Dhikr"    },
-    { id:"serenite", icon:"🌿", label:"Sérénité" },
-    { id:"profil",   icon:"👤", label:"Profil"   },
-  ];
-
-  // ── Écran de chargement (vérification session) ──
-  if (session === undefined) {
-    return (
-      <>
-        <Styles />
-        <div style={{ minHeight:"100svh", maxWidth:430, margin:"0 auto", background:"linear-gradient(160deg,#0D1F14,#1A1035)", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
-          <div style={{ width:64, height:64, borderRadius:20, background:"linear-gradient(135deg,#2A7A5A,#3DAA7F)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:32 }}>☽</div>
-          <p style={{ color:"rgba(255,255,255,0.5)", fontSize:14, fontWeight:600 }}>Chargement...</p>
-        </div>
-      </>
-    );
-  }
-
-  // ── Non connecté → écran Auth ──
-  if (!session) {
-    return (
-      <>
-        <Styles />
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Nunito:wght@400;500;600;700;800&display=swap'); input{outline:none;} input::placeholder{color:rgba(255,255,255,0.3);}`}</style>
-        <Auth />
-      </>
-    );
-  }
-
-  // ── Connecté → Onboarding si première fois ──
-  if (!onboarded) {
-    return (
-      <>
-        <Styles />
-        <Onboarding onDone={() => setOnboarded(true)} />
-      </>
-    );
-  }
-
-  // ── Connecté + Onboarding fait → App principale ──
-  const userEmail = session.user?.email || "";
-  const userName  = userEmail.split("@")[0]; // "youssef" depuis "youssef@gmail.com"
-
-  return (
-    <>
-      <Styles />
-      <div className={`app${dark ? " dark" : ""}`}>
-
-        {!reader && !showPremium && (
-          <div style={{padding:"10px 16px 0",flexShrink:0}}>
-            <div className="status-bar">
-              <div className="stat-chip"><span style={{color:"var(--heart)"}}>♥</span>{hassanates.toLocaleString()}</div>
-              <div className="stat-chip"><span className="fire">🔥</span>{streak}j</div>
-              <div className="stat-chip">⏱️ {readingMins} min</div>
-              {isPremium
-                ? <span style={{fontSize:12,fontWeight:700,color:"var(--gold)"}}>★ Gold</span>
-                : <button onClick={openPremium} style={{background:"linear-gradient(135deg,#C49A3C,#E8C060)",border:"none",borderRadius:999,padding:"4px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#fff"}}>★ Premium</button>}
-              <button onClick={()=>setDark(!dark)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18}}>{dark?"☀️":"🌙"}</button>
-            </div>
-          </div>
-        )}
-
-        {!reader && !showPremium && tab==="home"     && <HomeScreen hassanates={hassanates} streak={streak} readingMins={readingMins} onStart={handleStart} userName={userName} />}
-        {!reader && !showPremium && tab==="quran"    && <QuranScreen onOpen={s => setReader({ surah:s, verseId:1 })} />}
-        {!reader && !showPremium && tab==="dhikr"    && <DhikrScreen onAddH={addH} toast={showToast} />}
-        {!reader && !showPremium && tab==="serenite" && <SereniteScreen />}
-        {!reader && !showPremium && tab==="profil"   && (
-          <ProfilScreen
-            hassanates={hassanates} streak={streak} readingMins={readingMins}
-            goalMins={goalMins} setGoalMins={setGoalMins}
-            onOpenPremium={openPremium} isPremium={isPremium}
-            fontSizes={fontSizes} setFontSizes={setFontSizes}
-            savedVerses={savedVerses} setSavedVerses={setSavedVerses}
-            userName={userName} userEmail={userEmail}
-            onLogout={handleLogout}
-          />
-        )}
-
-        {reader && (
-          <VerseReader
-            surah={reader.surah}
-            initialVerseId={reader.verseId}
-            onClose={() => setReader(null)}
-            onGoHome={goHome}
-            onAddH={addH}
-            notes={notes} setNotes={setNotes}
-            goalSecs={goalMins * 60}
-            onTimeSpent={s => setReadingMins(m => m + Math.round(s / 60))}
-            savedVerses={savedVerses} setSavedVerses={setSavedVerses}
-            fontSizes={fontSizes}
-          />
-        )}
-
-        {showPremium && (
-          <PremiumPage
-            onClose={() => setShowPremium(false)}
-            onActivate={() => { setIsPremium(true); showToast("★ Premium Gold activé !"); }}
-          />
-        )}
-
-        {toast && <div className="toast">{toast}</div>}
-
-        {!reader && !showPremium && (
-          <nav className="nav-bar">
-            {nav.map(it => (
-              <div key={it.id} className={`nav-item${tab===it.id?" active":""}`} onClick={() => setTab(it.id)}>
-                <span style={{fontSize:22}}>{it.icon}</span>
-                <span className="nav-lbl">{it.label}</span>
-              </div>
-            ))}
-          </nav>
-        )}
-      </div>
-    </>
-  );
-}
   };
 
   const nav = [
