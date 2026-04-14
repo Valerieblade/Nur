@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Auth from "./components/Auth";
 import { supabase } from "./lib/supabase";
-
 /* ─────────────────────────────────────────
    STYLES
 ───────────────────────────────────────── */
